@@ -36,10 +36,12 @@ public class StatusService {
 
     @Transactional
     public StatusDto upsertFromClient(StatusDto request) {
-        StatusMessage saved = saveWithConflictResolution(request);
-        replicationPublisher.publishUpsert(saved);
-        broadcastChange(saved);
-        return StatusDto.from(saved);
+        SaveResult result = saveWithConflictResolution(request);
+        if (result.changed()) {
+            replicationPublisher.publishUpsert(result.message());
+            broadcastChange(result.message());
+        }
+        return StatusDto.from(result.message());
     }
 
     @Transactional
@@ -54,37 +56,32 @@ public class StatusService {
     @Transactional
     public void applyReplication(StatusReplicationMessage message) {
         if (StatusEvents.DELETE.equalsIgnoreCase(message.eventType())) {
-            repository.deleteById(message.username());
-            broadcastDelete(message.username());
+            if (repository.existsById(message.username())) {
+                repository.deleteById(message.username());
+                broadcastDelete(message.username());
+            }
             return;
         }
 
-        StatusDto request = new StatusDto(
-                message.username(),
-                message.statustext(),
-                message.uhrzeit(),
-                message.latitude(),
-                message.longitude()
-        );
+        StatusDto request = StatusDto.from(message);
 
-        StatusMessage saved = saveWithConflictResolution(request);
-        broadcastChange(saved);
+        SaveResult result = saveWithConflictResolution(request);
+        if (result.changed()) {
+            broadcastChange(result.message());
+        }
     }
 
-    private StatusMessage saveWithConflictResolution(StatusDto request) {
+    private SaveResult saveWithConflictResolution(StatusDto request) {
         Optional<StatusMessage> existing = repository.findById(request.username());
         if (existing.isPresent() && !request.uhrzeit().isAfter(existing.get().getUhrzeit())) {
-            return existing.get();
+            return new SaveResult(existing.get(), false);
         }
 
-        StatusMessage updated = new StatusMessage(
-                request.username(),
-                request.statustext(),
-                request.uhrzeit(),
-                request.latitude(),
-                request.longitude()
-        );
-        return repository.save(updated);
+        StatusMessage updated = request.toEntity();
+        return new SaveResult(repository.save(updated), true);
+    }
+
+    private record SaveResult(StatusMessage message, boolean changed) {
     }
 
     private void broadcastChange(StatusMessage message) {

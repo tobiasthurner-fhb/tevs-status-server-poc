@@ -1,6 +1,7 @@
 package com.statusserver.status.application.dto;
 
 import com.statusserver.status.domain.StatusMessage;
+import com.statusserver.status.messaging.replication.StatusReplicationMessage;
 import java.time.OffsetDateTime;
 
 public record StatusDto(
@@ -17,6 +18,26 @@ public record StatusDto(
                 message.getUhrzeit(),
                 message.getLatitude(),
                 message.getLongitude()
+        );
+    }
+
+    public static StatusDto from(StatusReplicationMessage message) {
+        return new StatusDto(
+                message.username(),
+                message.statustext(),
+                message.uhrzeit(),
+                message.latitude(),
+                message.longitude()
+        );
+    }
+
+    public StatusMessage toEntity() {
+        return new StatusMessage(
+                username,
+                statustext,
+                uhrzeit,
+                latitude,
+                longitude
         );
     }
 }

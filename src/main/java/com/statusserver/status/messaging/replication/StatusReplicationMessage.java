@@ -5,6 +5,7 @@ import com.statusserver.status.messaging.StatusEvents;
 import java.time.OffsetDateTime;
 
 public record StatusReplicationMessage(
+        String sourceNodeId,
         String eventType,
         String username,
         String statustext,
@@ -12,8 +13,9 @@ public record StatusReplicationMessage(
         double latitude,
         double longitude
 ) {
-    public static StatusReplicationMessage upsert(StatusMessage statusMessage) {
+    public static StatusReplicationMessage upsert(String sourceNodeId, StatusMessage statusMessage) {
         return new StatusReplicationMessage(
+                sourceNodeId,
                 StatusEvents.UPSERT,
                 statusMessage.getUsername(),
                 statusMessage.getStatustext(),
@@ -23,7 +25,7 @@ public record StatusReplicationMessage(
         );
     }
 
-    public static StatusReplicationMessage delete(String username) {
-        return new StatusReplicationMessage(StatusEvents.DELETE, username, null, null, 0, 0);
+    public static StatusReplicationMessage delete(String sourceNodeId, String username) {
+        return new StatusReplicationMessage(sourceNodeId, StatusEvents.DELETE, username, null, null, 0, 0);
     }
 }
