@@ -1,151 +1,41 @@
 # Status Server
 
-Spring-Boot-Service zur Verwaltung und Replikation von Statusmeldungen im TEVS-Kontext. Der Service speichert Statusdaten pro Node in PostgreSQL, repliziert Änderungen über RabbitMQ und verteilt Updates an Clients per WebSocket/STOMP.
-
-## Funktionen
-
-- REST-API zum Anlegen, Lesen und Löschen von Statusmeldungen
-- PostgreSQL-Persistenz pro Server-Node
-- Node-zu-Node-Replikation über RabbitMQ
-- Live-Updates für Clients über WebSocket/STOMP
-- Konfliktauflösung per `Last-Writer-Wins` auf Basis von `uhrzeit`
-
-## Technologien
-
-- Java 21
-- Spring Boot 3
-- Spring Web
-- Spring Data JPA
-- Spring AMQP
-- Spring WebSocket
-- PostgreSQL
-- RabbitMQ
-- Maven
-- Docker / Docker Compose
-
-## Projektstruktur
+Drei gleichwertige Statusserver-Nodes hinter einem zentralen NGINX-Loadbalancer. REST- und WebSocket/STOMP-Clients verwenden nur:
 
 ```text
-src/main/java/com/statusserver
-├─ StatusServerApplication.java
-├─ config
-│  ├─ RabbitConfig.java
-│  ├─ RabbitMessageConfig.java
-│  └─ WebSocketConfig.java
-└─ status
-   ├─ api
-   │  └─ StatusController.java
-   ├─ application
-   │  ├─ StatusService.java
-   │  └─ dto
-   │     └─ StatusDto.java
-   ├─ domain
-   │  └─ StatusMessage.java
-   ├─ messaging
-   │  ├─ StatusChannels.java
-   │  ├─ StatusEvents.java
-   │  └─ replication
-   │     ├─ StatusReplicationListener.java
-   │     ├─ StatusReplicationMessage.java
-   │     └─ StatusReplicationPublisher.java
-   └─ persistence
-      └─ StatusMessageRepository.java
+http://localhost:8440
 ```
 
-## Voraussetzungen
-
-- Java 21 oder neuer
-- Maven 3.9+ oder Nutzung des Maven Wrappers `mvnw`
-- Optional: Docker Desktop für Containerbetrieb
-
-## Lokaler Start
-
-Zuerst die benötigten Infrastruktur-Dienste starten, zum Beispiel PostgreSQL und RabbitMQ. Die Default-Konfiguration in `src/main/resources/application.yaml` erwartet:
-
-- PostgreSQL auf `localhost:5432`
-- Datenbank `statusdb`
-- Benutzer `statususer`
-- Passwort `statuspass`
-- RabbitMQ auf `localhost:5672`
-
-Danach den Service starten:
-
-```bash
-./mvnw spring-boot:run
-```
-
-Unter Windows:
-
-```powershell
-.\mvnw.cmd spring-boot:run
-```
-
-Der Service läuft standardmäßig auf `http://localhost:8080`.
-
-## Start mit Docker Compose
-
-Das Repository enthält ein Compose-Setup mit:
-
-- `postgres1` und `postgres2`
-- einem RabbitMQ-Broker
-- zwei `status-server`-Instanzen
-
-Start:
+## Start
 
 ```bash
 docker compose up --build
 ```
 
-Danach sind die Instanzen erreichbar unter:
+Testaufruf:
 
-- `http://localhost:8080`
-- `http://localhost:8081`
+```powershell
+curl.exe http://localhost:8440/api/status
+```
 
-RabbitMQ Management UI:
-
-- `http://localhost:15672`
-- Standard-Login: `guest` / `guest`
-
-## Konfiguration
-
-Wichtige Properties:
-
-- `server.port`
-- `app.node-id`
-- `spring.datasource.url`
-- `spring.datasource.username`
-- `spring.datasource.password`
-- `spring.rabbitmq.host`
-- `spring.rabbitmq.port`
-- `spring.rabbitmq.username`
-- `spring.rabbitmq.password`
-
-Im Compose-Setup wird `APP_NODE_ID` pro Instanz gesetzt, damit jede Node eine eigene Replikations-Queue erhält.
+Im Compose-Setup ist nur der Gateway lokal veröffentlicht. PostgreSQL, RabbitMQ und die Statusserver-Nodes sind nur intern im Docker-Netz erreichbar.
 
 ## REST-API
 
-Base-Pfad: `/api/status`
+Base-URL:
 
-### Alle Statusmeldungen lesen
+```text
+http://localhost:8440/api/status
+```
 
 ```http
 GET /api/status
-```
-
-### Status eines Benutzers lesen
-
-```http
 GET /api/status/{username}
-```
-
-### Status anlegen oder aktualisieren
-
-```http
 POST /api/status
-Content-Type: application/json
+DELETE /api/status/{username}
 ```
 
-Beispiel:
+Beispiel für `POST /api/status`:
 
 ```json
 {
@@ -157,45 +47,54 @@ Beispiel:
 }
 ```
 
-### Status löschen
+## Loadbalancer
 
-```http
-DELETE /api/status/{username}
-```
+NGINX verteilt Requests per `least_conn` auf `status-server-1`, `status-server-2` und `status-server-3`.
+
+Node-Ausfälle werden durch diese NGINX-Einstellungen abgefangen:
+
+- `max_fails=1`
+- `fail_timeout=5s`
+- `proxy_next_upstream`
+- `proxy_next_upstream_tries=3`
+
+Wenn eine Node ausfällt, versucht NGINX automatisch eine andere Node. Die Client-URL bleibt gleich.
+
+NGINX leitet auch WebSocket-Verbindungen weiter, indem die `Upgrade`- und `Connection`-Header an die Statusserver-Nodes weitergegeben werden.
+
+## Replikation
+
+- Schreibvorgänge werden lokal gespeichert und als RabbitMQ-Event veröffentlicht.
+- Jede Node hat eine eigene Queue anhand ihrer `APP_NODE_ID`.
+- Eigene Echo-Events werden ignoriert.
+- Fremde Events werden lokal übernommen.
+- Bei konkurrierenden Updates gewinnt die neuere `uhrzeit`.
+- Deletes werden als Delete-Events repliziert.
 
 ## WebSocket / STOMP
 
-- Endpoint: `/ws`
-- Application Prefix: `/app`
-- Topic für Status-Updates: `/topic/status-feed`
-- Topic für Lösch-Events: `/topic/status-events`
+STOMP/WebSocket wird für Live-Updates an Clients verwendet.
 
-Lösch-Events werden aktuell als String mit Präfix `DELETED:` versendet.
-
-## Replikationsverhalten
-
-- Schreibvorgänge werden lokal gespeichert.
-- Danach wird ein Replikations-Event an RabbitMQ veröffentlicht.
-- Andere Nodes konsumieren dieses Event und übernehmen die Änderung lokal.
-- Wenn bereits ein Eintrag existiert, gewinnt die Meldung mit der neueren `uhrzeit`.
-
-## Tests
-
-Testlauf:
-
-```bash
-./mvnw clean test
+```text
+Endpoint: /ws
+Application Prefix: /app
+Topic Prefix: /topic
+Status-Updates: /topic/status-feed
+Delete-Events: /topic/status-events
 ```
 
-Unter Windows:
+Über den Gateway ist der Endpoint erreichbar unter:
+
+```text
+ws://localhost:8440/ws
+```
+
+## Initialer Sync
+
+Beim Start fragt eine Node Snapshots ihrer Peers über `/internal/status-sync/snapshot` ab. Während dieser Grace Period beantwortet sie öffentliche `/api/status`-Requests mit `503 Service Unavailable`.
+
+## Tests
 
 ```powershell
 .\mvnw.cmd clean test
 ```
-
-Die Tests verwenden H2 im Speicher und deaktivieren RabbitMQ-Listener im Testkontext.
-
-## Hinweise
-
-- `spring.jpa.hibernate.ddl-auto=update` ist aktuell auf einfache Entwicklung ausgelegt.
-- Das Projekt ist derzeit ein PoC ohne TLS, Authentifizierung oder ausgearbeitete Fehlerverträge.

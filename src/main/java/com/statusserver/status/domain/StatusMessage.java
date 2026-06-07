@@ -11,6 +11,9 @@ import lombok.Setter;
 
 import java.time.OffsetDateTime;
 
+/**
+ * Persistierter Statuszustand eines Benutzers.
+ */
 @Entity
 @Table(name = "status_messages")
 @Getter

@@ -7,8 +7,17 @@ import org.springframework.amqp.support.converter.MessageConverter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+/**
+ * Konfiguriert die JSON-Serialisierung für RabbitMQ-Nachrichten.
+ */
 @Configuration
 public class RabbitMessageConfig {
+    /**
+     * Erstellt einen MessageConverter mit Java-Time-Unterstützung.
+     *
+     * @param objectMapper zentraler Jackson-Mapper der Anwendung
+     * @return JSON-MessageConverter für AMQP
+     */
     @Bean
     public MessageConverter messageConverter(ObjectMapper objectMapper) {
         objectMapper.registerModule(new JavaTimeModule());

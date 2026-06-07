@@ -11,9 +11,26 @@ spring:
     open-in-view: false
   rabbitmq:
     host: localhost
-    port: 5672
+    port: 5671
     username: guest
     password: guest
+    ssl:
+      enabled: true
+      trust-store: classpath:certs/rabbitmq-truststore.p12
+      trust-store-password: changeit
+      trust-store-type: PKCS12
 
 server:
-  port: 8080
+  port: 8443
+  ssl:
+    enabled: true
+    key-store: classpath:certs/status-server.p12
+    key-store-password: changeit
+    key-store-type: PKCS12
+
+app:
+  node-id: ${APP_NODE_ID:default-node}
+  peer-base-urls: ${APP_PEER_BASE_URLS:}
+  bootstrap-timeout: 30s
+  bootstrap-retry-delay: 2s
+  bootstrap-require-peer: ${APP_BOOTSTRAP_REQUIRE_PEER:true}

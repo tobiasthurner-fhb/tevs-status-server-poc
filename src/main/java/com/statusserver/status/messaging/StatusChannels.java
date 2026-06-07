@@ -1,5 +1,8 @@
 package com.statusserver.status.messaging;
 
+/**
+ * Zentrale Namen für RabbitMQ- und WebSocket-Kanäle.
+ */
 public final class StatusChannels {
     public static final String REPLICATION_EXCHANGE = "status.replication.exchange";
     public static final String REPLICATION_ROUTING_KEY = "status.changed";
@@ -11,6 +14,9 @@ public final class StatusChannels {
     public static final String WS_APP_PREFIX = "/app";
     public static final String WS_ENDPOINT = "/ws";
 
+    /**
+     * Verhindert Instanziierung dieser Konstantenklasse.
+     */
     private StatusChannels() {
     }
 }

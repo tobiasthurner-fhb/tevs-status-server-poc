@@ -15,17 +15,31 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
+/**
+ * REST-Controller für Statusmeldungen aus Sicht externer Clients.
+ */
 @RestController
 @RequestMapping("/api/status")
 @RequiredArgsConstructor
 public class StatusController {
     private final StatusService statusService;
 
+    /**
+     * Liefert alle aktuell bekannten Statusmeldungen dieser Node.
+     *
+     * @return Liste aller Statusmeldungen
+     */
     @GetMapping
     public List<StatusDto> listAll() {
         return statusService.findAll();
     }
 
+    /**
+     * Liefert die Statusmeldung eines bestimmten Benutzers.
+     *
+     * @param username eindeutiger Benutzername
+     * @return Statusmeldung oder 404, wenn kein Eintrag existiert
+     */
     @GetMapping("/{username}")
     public ResponseEntity<StatusDto> getOne(@PathVariable String username) {
         return statusService.findOne(username)
@@ -33,11 +47,23 @@ public class StatusController {
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
+    /**
+     * Erstellt oder aktualisiert eine Statusmeldung und startet die Replikation.
+     *
+     * @param request eingehende Statusmeldung
+     * @return gespeicherte Statusmeldung
+     */
     @PostMapping
     public ResponseEntity<StatusDto> upsert(@RequestBody StatusDto request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(statusService.upsertFromClient(request));
     }
 
+    /**
+     * Löscht die Statusmeldung eines Benutzers und repliziert die Löschung.
+     *
+     * @param username eindeutiger Benutzername
+     * @return leere Antwort bei erfolgreicher Verarbeitung
+     */
     @DeleteMapping("/{username}")
     public ResponseEntity<Void> delete(@PathVariable String username) {
         statusService.deleteFromClient(username);

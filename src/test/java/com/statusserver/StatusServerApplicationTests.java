@@ -3,6 +3,9 @@ package com.statusserver;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 
+/**
+ * Basistest, der prüft, ob der Spring-Kontext mit Testdatenbank startet.
+ */
 @SpringBootTest(properties = {
         "spring.datasource.url=jdbc:h2:mem:testdb;MODE=PostgreSQL;DB_CLOSE_DELAY=-1",
         "spring.datasource.driver-class-name=org.h2.Driver",
@@ -14,6 +17,9 @@ import org.springframework.boot.test.context.SpringBootTest;
 })
 class StatusServerApplicationTests {
 
+    /**
+     * Lädt den Anwendungskontext ohne weitere Annahmen.
+     */
     @Test
     void contextLoads() {
     }
