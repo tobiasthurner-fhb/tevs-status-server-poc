@@ -47,6 +47,7 @@ services:
   status-server-1:
     image: status-server:local
     build: .
+    pull_policy: build
     depends_on:
       - postgres1
       - rabbitmq
@@ -62,7 +63,7 @@ services:
 
   status-server-2:
     image: status-server:local
-    build: .
+    pull_policy: never
     depends_on:
       - postgres2
       - rabbitmq
@@ -78,7 +79,7 @@ services:
 
   status-server-3:
     image: status-server:local
-    build: .
+    pull_policy: never
     depends_on:
       - postgres3
       - rabbitmq
