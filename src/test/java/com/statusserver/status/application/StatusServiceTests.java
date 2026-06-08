@@ -4,7 +4,9 @@ import com.statusserver.status.application.dto.StatusDto;
 import com.statusserver.status.messaging.replication.StatusReplicationMessage;
 import com.statusserver.status.messaging.replication.StatusReplicationPublisher;
 import com.statusserver.status.persistence.StatusMessageRepository;
+import com.statusserver.status.persistence.StatusTombstoneRepository;
 import com.statusserver.status.sync.StatusSnapshot;
+import com.statusserver.status.sync.StatusTombstoneDto;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,6 +19,11 @@ import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.OffsetDateTime;
+import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -41,12 +48,16 @@ class StatusServiceTests {
     @Autowired
     private StatusMessageRepository statusRepository;
 
+    @Autowired
+    private StatusTombstoneRepository tombstoneRepository;
+
     /**
      * Bereinigt Status-Tabellen vor jedem Testfall.
      */
     @BeforeEach
     void setUp() {
         statusRepository.deleteAll();
+        tombstoneRepository.deleteAll();
     }
 
     /**
@@ -83,7 +94,7 @@ class StatusServiceTests {
     @Test
     void importsSnapshotWithStatuses() {
         OffsetDateTime statusTime = OffsetDateTime.parse("2026-03-03T13:30:00+01:00");
-        StatusSnapshot snapshot = new StatusSnapshot(java.util.List.of(status("RECON-01", "synced", statusTime)));
+        StatusSnapshot snapshot = new StatusSnapshot(List.of(status("RECON-01", "synced", statusTime)), List.of());
 
         statusService.importSnapshot(snapshot);
 
@@ -98,9 +109,79 @@ class StatusServiceTests {
         OffsetDateTime statusTime = OffsetDateTime.parse("2026-03-03T13:30:00+01:00");
 
         statusService.upsertFromClient(status("RECON-01", "local", statusTime));
-        statusService.importSnapshot(new StatusSnapshot(java.util.List.of()));
+        statusService.importSnapshot(new StatusSnapshot(List.of(), List.of()));
 
         assertThat(statusService.findOne("RECON-01")).isPresent();
+    }
+
+    /**
+     * Prüft, dass ein Delete-Tombstone ältere Status aus Snapshots blockiert.
+     */
+    @Test
+    void tombstonePreventsOlderSnapshotStatusFromReappearing() {
+        OffsetDateTime createdAt = OffsetDateTime.parse("2026-03-03T13:30:00+01:00");
+        OffsetDateTime deletedAt = createdAt.plusMinutes(1);
+
+        statusService.applyReplication(StatusReplicationMessage.delete("node-2", "RECON-01", deletedAt));
+        statusService.importSnapshot(new StatusSnapshot(List.of(status("RECON-01", "old", createdAt)), List.of()));
+
+        assertThat(statusService.findOne("RECON-01")).isEmpty();
+        assertThat(tombstoneRepository.findById("RECON-01")).isPresent();
+    }
+
+    /**
+     * Prüft, dass Tombstones über Snapshots auf andere Nodes übertragen werden.
+     */
+    @Test
+    void snapshotTombstoneDeletesOlderLocalStatus() {
+        OffsetDateTime createdAt = OffsetDateTime.parse("2026-03-03T13:30:00+01:00");
+        OffsetDateTime deletedAt = createdAt.plusMinutes(1);
+
+        statusService.upsertFromClient(status("RECON-01", "local", createdAt));
+        statusService.importSnapshot(new StatusSnapshot(List.of(), List.of(new StatusTombstoneDto("RECON-01", deletedAt))));
+
+        assertThat(statusService.findOne("RECON-01")).isEmpty();
+    }
+
+    /**
+     * Prüft, dass ein bewusst neuerer Status nach einer Löschung wieder gültig gesetzt werden kann.
+     */
+    @Test
+    void newerStatusCanReplaceTombstone() {
+        OffsetDateTime deletedAt = OffsetDateTime.parse("2026-03-03T13:30:00+01:00");
+        OffsetDateTime recreatedAt = deletedAt.plusMinutes(1);
+
+        statusService.applyReplication(StatusReplicationMessage.delete("node-2", "RECON-01", deletedAt));
+        statusService.upsertFromClient(status("RECON-01", "recreated", recreatedAt));
+
+        assertThat(statusService.findOne("RECON-01")).get().extracting(StatusDto::statustext).isEqualTo("recreated");
+        assertThat(tombstoneRepository.findById("RECON-01")).isEmpty();
+    }
+
+    /**
+     * Prüft die Mindestanforderung von 10 simultanen Clients mit parallelen Writes.
+     */
+    @Test
+    void supportsAtLeastTenSimultaneousClients() throws Exception {
+        OffsetDateTime baseTime = OffsetDateTime.parse("2026-03-03T13:30:00+01:00");
+        ExecutorService executor = Executors.newFixedThreadPool(10);
+        try {
+            List<Callable<Void>> clients = java.util.stream.IntStream.rangeClosed(1, 10)
+                    .mapToObj(clientId -> (Callable<Void>) () -> {
+                        statusService.upsertFromClient(status("RECON-%02d".formatted(clientId), "client-" + clientId,
+                                baseTime.plusSeconds(clientId)));
+                        return null;
+                    })
+                    .toList();
+
+            for (Future<Void> result : executor.invokeAll(clients)) {
+                result.get();
+            }
+        } finally {
+            executor.shutdownNow();
+        }
+
+        assertThat(statusService.findAll()).hasSize(10);
     }
 
     /**

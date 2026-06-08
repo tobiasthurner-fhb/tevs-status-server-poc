@@ -69,7 +69,8 @@ NGINX leitet auch WebSocket-Verbindungen weiter, indem die `Upgrade`- und `Conne
 - Eigene Echo-Events werden ignoriert.
 - Fremde Events werden lokal übernommen.
 - Bei konkurrierenden Updates gewinnt die neuere `uhrzeit`.
-- Deletes werden als Delete-Events repliziert.
+- Deletes werden als Delete-Events repliziert und als Tombstones mit Löschzeitpunkt gespeichert.
+- Tombstones verhindern, dass veraltete Statusmeldungen nach Node-Ausfällen oder späterem Sync wieder auftauchen.
 
 ## WebSocket / STOMP
 
@@ -98,3 +99,9 @@ Beim Start fragt eine Node Snapshots ihrer Peers über `/internal/status-sync/sn
 ```powershell
 .\mvnw.cmd clean test
 ```
+
+Die Tests decken unter anderem ab:
+
+- Delete-Replikation inklusive Tombstones
+- Snapshot-Recovery nach verpassten Delete-Events
+- parallele Verarbeitung von mindestens 10 simultanen Clients

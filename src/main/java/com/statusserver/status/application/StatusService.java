@@ -2,12 +2,15 @@ package com.statusserver.status.application;
 
 import com.statusserver.status.application.dto.StatusDto;
 import com.statusserver.status.domain.StatusMessage;
+import com.statusserver.status.domain.StatusTombstone;
 import com.statusserver.status.messaging.StatusChannels;
 import com.statusserver.status.messaging.StatusEvents;
 import com.statusserver.status.messaging.replication.StatusReplicationMessage;
 import com.statusserver.status.messaging.replication.StatusReplicationPublisher;
 import com.statusserver.status.persistence.StatusMessageRepository;
+import com.statusserver.status.persistence.StatusTombstoneRepository;
 import com.statusserver.status.sync.StatusSnapshot;
+import com.statusserver.status.sync.StatusTombstoneDto;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -27,6 +30,7 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class StatusService {
     private final StatusMessageRepository repository;
+    private final StatusTombstoneRepository tombstoneRepository;
     private final StatusReplicationPublisher replicationPublisher;
     private final SimpMessagingTemplate messagingTemplate;
 
@@ -117,7 +121,12 @@ public class StatusService {
      */
     @Transactional(readOnly = true)
     public StatusSnapshot snapshot() {
-        return new StatusSnapshot(findAll());
+        List<StatusTombstoneDto> tombstones = tombstoneRepository.findAll().stream()
+                .sorted(Comparator.comparing(StatusTombstone::getDeletedAt).reversed()
+                        .thenComparing(StatusTombstone::getUsername))
+                .map(StatusTombstoneDto::from)
+                .toList();
+        return new StatusSnapshot(findAll(), tombstones);
     }
 
     /**
@@ -138,6 +147,9 @@ public class StatusService {
             });
         }
 
+        if (snapshot.tombstones() != null) {
+            snapshot.tombstones().forEach(tombstone -> applyDelete(tombstone.username(), tombstone.deletedAt()));
+        }
     }
 
     /**
@@ -147,11 +159,17 @@ public class StatusService {
      * @return Ergebnis mit gespeicherter Meldung und Änderungsflag
      */
     private SaveResult saveWithConflictResolution(StatusDto request) {
+        Optional<StatusTombstone> tombstone = tombstoneRepository.findById(request.username());
+        if (tombstone.isPresent() && !request.uhrzeit().isAfter(tombstone.get().getDeletedAt())) {
+            return new SaveResult(request.toEntity(), false);
+        }
+
         Optional<StatusMessage> existing = repository.findById(request.username());
         if (existing.isPresent() && !request.uhrzeit().isAfter(existing.get().getUhrzeit())) {
             return new SaveResult(existing.get(), false);
         }
 
+        tombstoneRepository.deleteById(request.username());
         StatusMessage updated = request.toEntity();
         return new SaveResult(repository.save(updated), true);
     }
@@ -169,12 +187,18 @@ public class StatusService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "uhrzeit is required for delete replication");
         }
 
-        boolean exists = repository.existsById(username);
-        if (!exists) {
+        Optional<StatusTombstone> existingTombstone = tombstoneRepository.findById(username);
+        if (existingTombstone.isPresent() && !deletedAt.isAfter(existingTombstone.get().getDeletedAt())) {
+            return new DeleteResult(false);
+        }
+
+        Optional<StatusMessage> existingStatus = repository.findById(username);
+        if (existingStatus.isPresent() && !deletedAt.isAfter(existingStatus.get().getUhrzeit())) {
             return new DeleteResult(false);
         }
 
         repository.deleteById(username);
+        tombstoneRepository.save(new StatusTombstone(username, deletedAt));
         return new DeleteResult(true);
     }
 
