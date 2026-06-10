@@ -21,6 +21,23 @@ curl.exe http://localhost:8440/api/status
 Im Compose-Setup ist nur der Gateway lokal veröffentlicht. PostgreSQL, RabbitMQ und die Statusserver-Nodes sind nur intern im Docker-Netz erreichbar.
 Der Gateway lauscht lokal per HTTP auf Port `8440` und leitet intern per HTTPS an die Statusserver-Nodes auf Port `8443` weiter. RabbitMQ wird intern per TLS auf Port `5671` genutzt.
 
+## CORS
+
+REST-API und WebSocket-Endpunkt akzeptieren CORS nur von konfigurierten Angular-Frontend-Origins. Standardmäßig sind die lokalen Angular-Dev-Server erlaubt:
+
+```text
+http://localhost:4200
+http://127.0.0.1:4200
+```
+
+Für andere Frontend-URLs wird die kommagetrennte Umgebungsvariable `APP_ALLOWED_ORIGINS` gesetzt:
+
+```powershell
+$env:APP_ALLOWED_ORIGINS="https://frontend.example.com,https://admin.example.com"
+```
+
+Wildcard-Origins wie `*` werden nicht verwendet.
+
 ## REST-API
 
 Base-URL:

@@ -38,6 +38,8 @@ flowchart LR
 
 Clients senden REST-Requests an `http://localhost:8440`. WebSocket/STOMP-Clients verbinden sich mit `ws://localhost:8440/ws`. NGINX verteilt beide Verbindungsarten per `least_conn` auf eine erreichbare Statusserver-Node und terminiert nicht die interne Verbindung: zu den Nodes wird per HTTPS auf `8443` weitergeleitet.
 
+Die Statusserver-Nodes beschränken CORS für REST (`/api/**`) und WebSocket (`/ws`) auf konfigurierte Angular-Frontend-Origins. Die erlaubten Origins kommen aus `app.allowed-origins` bzw. der Umgebungsvariable `APP_ALLOWED_ORIGINS`; als lokale Defaults gelten `http://localhost:4200` und `http://127.0.0.1:4200`.
+
 ## Replikation
 
 Eine Node speichert Schreibvorgänge lokal und veröffentlicht danach ein RabbitMQ-Event. Andere Nodes übernehmen fremde Events und ignorieren eigene Echo-Nachrichten über die `sourceNodeId`.

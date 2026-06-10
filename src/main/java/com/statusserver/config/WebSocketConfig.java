@@ -1,6 +1,7 @@
 package com.statusserver.config;
 
 import com.statusserver.status.messaging.StatusChannels;
+import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.messaging.simp.config.MessageBrokerRegistry;
 import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBroker;
@@ -12,7 +13,10 @@ import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerCo
  */
 @Configuration
 @EnableWebSocketMessageBroker
+@RequiredArgsConstructor
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
+    private final AppProperties appProperties;
+
     /**
      * Aktiviert den einfachen Broker und definiert die Ziel-Präfixe.
      *
@@ -31,6 +35,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
      */
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
-        registry.addEndpoint(StatusChannels.WS_ENDPOINT).setAllowedOriginPatterns("*");
+        registry.addEndpoint(StatusChannels.WS_ENDPOINT)
+                .setAllowedOrigins(appProperties.getAllowedOrigins().toArray(String[]::new));
     }
 }

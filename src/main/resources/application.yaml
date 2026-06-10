@@ -31,6 +31,7 @@ server:
 app:
   node-id: ${APP_NODE_ID:default-node}
   peer-base-urls: ${APP_PEER_BASE_URLS:}
+  allowed-origins: ${APP_ALLOWED_ORIGINS:http://localhost:4200,http://127.0.0.1:4200}
   bootstrap-timeout: 30s
   bootstrap-retry-delay: 2s
   bootstrap-require-peer: ${APP_BOOTSTRAP_REQUIRE_PEER:true}
