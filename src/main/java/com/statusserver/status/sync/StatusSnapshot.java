@@ -5,7 +5,7 @@ import com.statusserver.status.application.dto.StatusDto;
 import java.util.List;
 
 /**
- * Vollständiger Zustand einer Node für initialen Sync und laufende Reconciliation.
+ * Vollständiger Zustand einer Node für den Bootstrap-Sync.
  *
  * @param statuses aktuelle Statusmeldungen
  * @param tombstones bekannte Löschmarken

@@ -1,6 +1,6 @@
 # Status Server
 
-Drei gleichwertige Statusserver-Nodes hinter einem zentralen NGINX-Loadbalancer. REST- und WebSocket/STOMP-Clients verwenden nur:
+Drei gleichwertige Statusserver-Nodes hinter einem zentralen NGINX-Loadbalancer. REST- und WebSocket/STOMP-Clients verwenden nur den Gateway:
 
 ```text
 http://localhost:8440
@@ -19,6 +19,7 @@ curl.exe http://localhost:8440/api/status
 ```
 
 Im Compose-Setup ist nur der Gateway lokal veröffentlicht. PostgreSQL, RabbitMQ und die Statusserver-Nodes sind nur intern im Docker-Netz erreichbar.
+Der Gateway lauscht lokal per HTTP auf Port `8440` und leitet intern per HTTPS an die Statusserver-Nodes auf Port `8443` weiter. RabbitMQ wird intern per TLS auf Port `5671` genutzt.
 
 ## REST-API
 
@@ -34,6 +35,8 @@ GET /api/status/{username}
 POST /api/status
 DELETE /api/status/{username}
 ```
+
+`GET /api/status/{username}` liefert `404 Not Found`, wenn für den Benutzer kein aktueller Status existiert. `POST /api/status` validiert Pflichtfelder, Zeitstempel und Koordinaten und liefert den lokal gültigen Zustand nach Konfliktauflösung zurück. `DELETE /api/status/{username}` erzeugt einen Tombstone mit dem aktuellen Löschzeitpunkt und liefert `204 No Content`.
 
 Beispiel für `POST /api/status`:
 
@@ -65,12 +68,14 @@ NGINX leitet auch WebSocket-Verbindungen weiter, indem die `Upgrade`- und `Conne
 ## Replikation
 
 - Schreibvorgänge werden lokal gespeichert und als RabbitMQ-Event veröffentlicht.
-- Jede Node hat eine eigene Queue anhand ihrer `APP_NODE_ID`.
+- Jede Node hat eine eigene transiente, auto-delete Queue anhand ihrer `APP_NODE_ID`.
 - Eigene Echo-Events werden ignoriert.
 - Fremde Events werden lokal übernommen.
+- RabbitMQ dient nur als Transportmedium. Offline verpasste Events werden nicht gepuffert, sondern beim Neustart per Snapshot-Sync nachgeladen.
 - Bei konkurrierenden Updates gewinnt die neuere `uhrzeit`.
 - Deletes werden als Delete-Events repliziert und als Tombstones mit Löschzeitpunkt gespeichert.
-- Tombstones verhindern, dass veraltete Statusmeldungen nach Node-Ausfällen oder späterem Sync wieder auftauchen.
+- Gleich alte oder ältere Updates und Deletes werden ignoriert.
+- Tombstones verhindern, dass veraltete Statusmeldungen nach Node-Ausfällen oder späterem Sync wieder auftauchen. Ein bewusst neuerer Status desselben Benutzers kann einen Tombstone wieder ersetzen.
 
 ## WebSocket / STOMP
 
@@ -92,7 +97,9 @@ ws://localhost:8440/ws
 
 ## Initialer Sync
 
-Beim Start fragt eine Node Snapshots ihrer Peers über `/internal/status-sync/snapshot` ab. Während dieser Grace Period beantwortet sie öffentliche `/api/status`-Requests mit `503 Service Unavailable`.
+Beim Start fragt eine Node Snapshots ihrer Peers über `/internal/status-sync/snapshot` ab. Der Snapshot enthält aktuelle Statusmeldungen und Tombstones. Fehlende Statusmeldungen in einem Peer-Snapshot löschen keine lokalen Statusmeldungen; nur explizite Tombstones lösen Löschungen aus.
+
+Während des Bootstraps beantwortet die Node öffentliche `/api/status/**`-Requests mit `503 Service Unavailable`. Interne Sync-Endpunkte bleiben erreichbar. Mit `APP_BOOTSTRAP_REQUIRE_PEER=true` wartet die Node bis mindestens ein Peer erreichbar war. Mit `false` wird sie nach `app.bootstrap-timeout` auch ohne erreichbaren Peer bereit.
 
 ## Tests
 

@@ -21,7 +21,8 @@ public class BootstrapState {
     }
 
     /**
-     * Markiert die Node nach Abschluss oder Timeout des Bootstrap-Syncs als bereit.
+     * Markiert die Node nach erfolgreichem Bootstrap-Sync, nach erlaubtem Timeout
+     * oder ohne konfigurierte Peers als bereit.
      */
     public void markReady() {
         ready.set(true);

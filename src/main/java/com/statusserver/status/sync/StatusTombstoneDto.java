@@ -5,7 +5,7 @@ import com.statusserver.status.domain.StatusTombstone;
 import java.time.OffsetDateTime;
 
 /**
- * Tombstone-Repräsentation für Snapshot-Sync und Reconciliation.
+ * Tombstone-Repräsentation für den Snapshot-Sync.
  *
  * @param username eindeutiger Benutzername
  * @param deletedAt fachlicher Löschzeitpunkt

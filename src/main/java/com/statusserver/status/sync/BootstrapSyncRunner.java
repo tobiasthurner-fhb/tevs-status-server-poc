@@ -28,6 +28,7 @@ public class BootstrapSyncRunner implements ApplicationRunner {
 
     /**
      * Startet die Grace-Period, synchronisiert von erreichbaren Peers und markiert die Node danach als bereit.
+     * Wenn ein Peer erforderlich ist, wird bis zu einem erfolgreichen Sync weiter versucht.
      *
      * @param args Startargumente der Anwendung
      * @throws Exception falls der Thread-Sleep während der Retry-Schleife unterbrochen wird

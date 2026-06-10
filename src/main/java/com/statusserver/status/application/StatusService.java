@@ -24,7 +24,8 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * Fachservice für Statusmeldungen, Konfliktauflösung, Replikation und Snapshot-Sync.
+ * Fachservice für Statusmeldungen, zeitstempelbasierte Konfliktauflösung,
+ * RabbitMQ-Replikation, WebSocket-Broadcasts und Snapshot-Sync.
  */
 @Service
 @RequiredArgsConstructor
@@ -58,7 +59,8 @@ public class StatusService {
     }
 
     /**
-     * Speichert eine Client-Änderung, prüft Konflikte und repliziert erfolgreiche Updates.
+     * Speichert eine Client-Änderung, prüft Konflikte und repliziert nur erfolgreiche Updates.
+     * Gleich alte oder ältere Updates werden ignoriert und nicht erneut veröffentlicht.
      *
      * @param request Statusmeldung des Clients
      * @return lokal gültige Statusmeldung nach Konfliktauflösung
@@ -75,7 +77,8 @@ public class StatusService {
     }
 
     /**
-     * Löscht einen Status aus Client-Sicht und repliziert die Löschung.
+     * Löscht einen Status aus Client-Sicht mit lokal erzeugtem Löschzeitpunkt und repliziert die Löschung.
+     * Die Löschung wird nur angewendet, wenn sie neuer als ein vorhandener Status oder Tombstone ist.
      *
      * @param username eindeutiger Benutzername
      */
@@ -92,6 +95,8 @@ public class StatusService {
 
     /**
      * Wendet eine von einer anderen Node empfangene Replikationsnachricht an.
+     * Eingehende Events werden nicht erneut per RabbitMQ veröffentlicht, aber bei lokalen Änderungen
+     * an verbundene WebSocket-Clients dieser Node gesendet.
      *
      * @param message empfangene Replikationsnachricht
      */
@@ -115,7 +120,7 @@ public class StatusService {
     }
 
     /**
-     * Erstellt einen Snapshot aller Statusmeldungen für bootende Peers.
+     * Erstellt einen Snapshot aller aktuellen Statusmeldungen und Tombstones für bootende Peers.
      *
      * @return vollständiger lokaler Sync-Snapshot
      */
@@ -131,6 +136,8 @@ public class StatusService {
 
     /**
      * Importiert einen Peer-Snapshot mit derselben deterministischen Konfliktlogik wie Replikation.
+     * Fehlende Statusmeldungen im Snapshot löschen keinen lokalen Zustand; nur Tombstones können
+     * lokale Statusmeldungen entfernen.
      *
      * @param snapshot Snapshot einer anderen Node
      */

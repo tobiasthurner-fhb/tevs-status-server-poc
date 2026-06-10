@@ -48,7 +48,8 @@ public class StatusController {
     }
 
     /**
-     * Erstellt oder aktualisiert eine Statusmeldung und startet die Replikation.
+     * Erstellt oder aktualisiert eine Statusmeldung.
+     * Nur konfliktfrei übernommene Änderungen werden repliziert.
      *
      * @param request eingehende Statusmeldung
      * @return gespeicherte Statusmeldung
