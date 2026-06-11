@@ -54,6 +54,7 @@ services:
     environment:
       APP_NODE_ID: node-1
       APP_PEER_BASE_URLS: https://status-server-2:8443,https://status-server-3:8443
+      APP_BOOTSTRAP_REQUIRE_PEER: false
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres1:5432/statusdb
       SPRING_DATASOURCE_USERNAME: statususer
       SPRING_DATASOURCE_PASSWORD: statuspass
@@ -70,6 +71,7 @@ services:
     environment:
       APP_NODE_ID: node-2
       APP_PEER_BASE_URLS: https://status-server-1:8443,https://status-server-3:8443
+      APP_BOOTSTRAP_REQUIRE_PEER: false
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres2:5432/statusdb
       SPRING_DATASOURCE_USERNAME: statususer
       SPRING_DATASOURCE_PASSWORD: statuspass
@@ -86,6 +88,7 @@ services:
     environment:
       APP_NODE_ID: node-3
       APP_PEER_BASE_URLS: https://status-server-1:8443,https://status-server-2:8443
+      APP_BOOTSTRAP_REQUIRE_PEER: false
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres3:5432/statusdb
       SPRING_DATASOURCE_USERNAME: statususer
       SPRING_DATASOURCE_PASSWORD: statuspass

@@ -69,6 +69,9 @@ public class StatusService {
     public StatusDto upsertFromClient(StatusDto request) {
         validateUpsert(request);
         SaveResult result = saveWithConflictResolution(request);
+        if (result.blockedByTombstone()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "status is older than latest delete tombstone");
+        }
         if (result.changed()) {
             replicationPublisher.publishUpsert(result.message());
             broadcastChange(result.message());
@@ -168,17 +171,17 @@ public class StatusService {
     private SaveResult saveWithConflictResolution(StatusDto request) {
         Optional<StatusTombstone> tombstone = tombstoneRepository.findById(request.username());
         if (tombstone.isPresent() && !request.uhrzeit().isAfter(tombstone.get().getDeletedAt())) {
-            return new SaveResult(request.toEntity(), false);
+            return new SaveResult(null, false, true);
         }
 
         Optional<StatusMessage> existing = repository.findById(request.username());
         if (existing.isPresent() && !request.uhrzeit().isAfter(existing.get().getUhrzeit())) {
-            return new SaveResult(existing.get(), false);
+            return new SaveResult(existing.get(), false, false);
         }
 
         tombstoneRepository.deleteById(request.username());
         StatusMessage updated = request.toEntity();
-        return new SaveResult(repository.save(updated), true);
+        return new SaveResult(repository.save(updated), true, false);
     }
 
     /**
@@ -254,8 +257,9 @@ public class StatusService {
      *
      * @param message gültige Statusmeldung
      * @param changed true, wenn der lokale Zustand geändert wurde
+     * @param blockedByTombstone true, wenn ein neuerer Tombstone das Update verworfen hat
      */
-    private record SaveResult(StatusMessage message, boolean changed) {
+    private record SaveResult(StatusMessage message, boolean changed, boolean blockedByTombstone) {
     }
 
     /**

@@ -159,6 +159,22 @@ class StatusServiceTests {
     }
 
     /**
+     * Prüft, dass ein Client-Create nach einem neueren Delete nicht fälschlich als gespeichert erscheint.
+     */
+    @Test
+    void clientUpsertOlderThanTombstoneReturnsConflict() {
+        OffsetDateTime deletedAt = OffsetDateTime.parse("2026-03-03T13:30:00+01:00");
+        OffsetDateTime olderCreate = deletedAt.minusMinutes(1);
+
+        statusService.applyReplication(StatusReplicationMessage.delete("node-2", "RECON-01", deletedAt));
+
+        assertThatThrownBy(() -> statusService.upsertFromClient(status("RECON-01", "old create", olderCreate)))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("409 CONFLICT");
+        assertThat(statusService.findOne("RECON-01")).isEmpty();
+    }
+
+    /**
      * Prüft die Mindestanforderung von 10 simultanen Clients mit parallelen Writes.
      */
     @Test

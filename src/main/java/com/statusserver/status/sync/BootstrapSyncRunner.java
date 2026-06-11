@@ -10,6 +10,7 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.stereotype.Component;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 
@@ -82,6 +83,8 @@ public class BootstrapSyncRunner implements ApplicationRunner {
     private boolean syncFromPeer(String peerBaseUrl) {
         try {
             StatusSnapshot snapshot = restTemplateBuilder
+                    .setConnectTimeout(Duration.ofSeconds(2))
+                    .setReadTimeout(Duration.ofSeconds(5))
                     .build()
                     .getForObject(peerBaseUrl + "/internal/status-sync/snapshot", StatusSnapshot.class);
             statusService.importSnapshot(snapshot);
